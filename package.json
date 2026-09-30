@@ -1,0 +1,23 @@
+{
+  "name": "darvas-pine-runner",
+  "version": "0.1.0",
+  "description": "Standalone Pine Script runner: PineTS inside a sandboxed iframe and Web Worker, driven over postMessage.",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5174 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview --port 5174 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "pinets": "0.10.0"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "typescript": "5.9.3",
+    "vite": "8.3.1"
+  }
+}
