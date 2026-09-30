@@ -15,14 +15,18 @@ License: AGPL-3.0-only (see `LICENSE`). PineTS is AGPL-3.0 as well.
 PineTS transpiles Pine to JavaScript and evaluates it with `new Function`. A script therefore runs
 with the full privileges of its JavaScript context. Running user scripts on a server would let a
 script read `process.env` or call `fetch`. The runner keeps scripts in the visitor's browser, inside
-an iframe whose `sandbox="allow-scripts"` attribute gives it an opaque origin, with a
-Content-Security-Policy of `connect-src 'none'`. A script can waste the visitor's own CPU and
-nothing else. The host page terminates the worker when a run exceeds its time budget.
+a sandboxed iframe on the runner's own origin, with a Content-Security-Policy of
+`connect-src 'none'`. The embedding page's cookies and storage are on another origin, so a script
+can waste the visitor's own CPU and nothing else. The host page terminates the worker when a run
+exceeds its time budget.
+
+Use `sandbox="allow-scripts allow-same-origin"`, not `allow-scripts` alone: an opaque origin makes
+the CSP `'self'` source match nothing, which blocks the runner's own scripts.
 
 ## Embedding
 
 ```html
-<iframe src="https://pine.example.com/" sandbox="allow-scripts" hidden></iframe>
+<iframe src="https://pine.example.com/" sandbox="allow-scripts allow-same-origin" hidden></iframe>
 ```
 
 ```js
@@ -42,12 +46,11 @@ frame.contentWindow.postMessage(
     candles: { time: [...], open: [...], high: [...], low: [...], close: [...], volume: [...] },
     timeoutMs: 10000,
   },
-  "*",
+  "https://pine.example.com",
 );
 ```
 
-Because the iframe origin is opaque, the target origin of `postMessage` has to be `"*"`. The runner
-answers to `event.source` with the sender's origin.
+The runner answers to `event.source` with the sender's origin.
 
 ## Protocol
 
