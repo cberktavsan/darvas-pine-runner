@@ -24,7 +24,11 @@ export interface RunRequest {
   /** TradingView timeframe string: "1", "5", "60", "240", "D", "W", "M". */
   timeframe: string;
   symbol?: string;
-  /** Input overrides keyed by the Pine variable name (`len = input.int(...)` is keyed "len"). */
+  /**
+   * Input overrides keyed by the Pine variable name (`len = input.int(...)` is keyed "len") or by
+   * the declaration id (`in_0`) for an input that is not assigned to a variable. Unknown keys and
+   * values the input rejects are skipped and reported in `warnings`.
+   */
   inputs?: Record<string, ScalarInput>;
   /** Wall-clock budget for the run. The runner terminates the worker when exceeded. */
   timeoutMs?: number;
@@ -36,6 +40,8 @@ export interface InputMeta {
   title: string;
   type: string;
   defval: unknown;
+  /** The value this run used: the override from `inputs` when one was accepted, else `defval`. */
+  value: unknown;
   minval?: number;
   maxval?: number;
   step?: number;

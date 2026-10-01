@@ -12,7 +12,7 @@ import {
   type RunnerCandles,
 } from "./protocol";
 import { createProvider, type FetchCandles } from "./provider";
-import { serializeContext, toRunError } from "./serialize";
+import { applyInputs, serializeContext, toRunError } from "./serialize";
 
 const MAX_LOOPS = 200_000;
 
@@ -39,9 +39,7 @@ async function run(request: RunRequest): Promise<RunReply> {
   const data = createProvider(request, hostFetcher(request.id));
   try {
     const indicator = new Indicator(upgrade.source);
-    for (const [key, value] of Object.entries(request.inputs ?? {})) {
-      indicator.input[key] = value;
-    }
+    const inputWarnings = applyInputs(indicator, request.inputs);
     const pine = new PineTS(data.provider, request.symbol ?? "UNKNOWN", request.timeframe);
     pine.setMaxLoops(MAX_LOOPS);
     const ctx = await pine.run(indicator);
@@ -53,6 +51,7 @@ async function run(request: RunRequest): Promise<RunReply> {
       result: serializeContext(ctx, indicator, {
         durationMs: performance.now() - started,
         upgradedFromVersion: upgrade.fromVersion,
+        inputWarnings,
       }),
     };
   } catch (error) {

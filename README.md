@@ -86,7 +86,9 @@ Runs execute one at a time in arrival order.
 `result` contains:
 
 - `title`, `shortTitle`, `overlay` from the `indicator()` declaration.
-- `inputs`: one entry per `input.*` call with `varId`, `title`, `type`, `defval` and bounds.
+- `inputs`: one entry per `input.*` call with `id`, `varId`, `title`, `type`, `defval`, bounds,
+  `options`, and `value`, the value this run used. An override in the request's `inputs` that names
+  no input or that the input rejects is skipped and listed in `warnings`.
 - `plots`: every visual call in declaration order. `style` is the PineTS style token: `line`,
   `style_histogram`, `style_columns`, `style_area`, `style_stepline`, `style_circles`,
   `style_cross`, `hline`, `fill`, `shape`, `char`, `background`, `barcolor`, `candle`, `bar`.

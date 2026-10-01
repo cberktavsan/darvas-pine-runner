@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Context, Indicator } from "pinets";
-import type { InputMeta, PlotPoint, PlotSeries, RunResult, RunnerCandles } from "./protocol";
+import type {
+  InputMeta,
+  PlotPoint,
+  PlotSeries,
+  RunResult,
+  RunnerCandles,
+  ScalarInput,
+} from "./protocol";
 
 const DRAWING_KEYS = {
   labels: "__labels__",
@@ -95,15 +102,37 @@ function finalDrawings(plot: PineTsPlot | undefined): Record<string, unknown>[] 
   );
 }
 
+/**
+ * Applies the embedder's input overrides. A saved override can outlive the input it was made for
+ * (the script was edited) or fall outside new bounds, so a rejected one is skipped, not fatal.
+ */
+export function applyInputs(
+  indicator: Indicator,
+  inputs: Record<string, ScalarInput> | undefined,
+): string[] {
+  const skipped: string[] = [];
+  for (const [key, value] of Object.entries(inputs ?? {})) {
+    try {
+      indicator.input[key] = value;
+    } catch (error) {
+      skipped.push(`input "${key}" ignored: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return skipped;
+}
+
 export function serializeInputs(indicator: Indicator): InputMeta[] {
   return indicator.getInputsMeta().map((meta) => {
     const m = meta as unknown as Record<string, unknown>;
+    const id = String(m.id ?? "");
+    const varId = String(m.varId ?? "");
     const out: InputMeta = {
-      id: String(m.id ?? ""),
-      varId: String(m.varId ?? ""),
+      id,
+      varId,
       title: String(m.title ?? m.name ?? ""),
       type: String(m.type ?? "unknown"),
       defval: m.defval,
+      value: (indicator.input as Record<string, unknown>)[varId || id],
     };
     if (typeof m.minval === "number") out.minval = m.minval;
     if (typeof m.maxval === "number") out.maxval = m.maxval;
@@ -116,7 +145,7 @@ export function serializeInputs(indicator: Indicator): InputMeta[] {
 export function serializeContext(
   ctx: Context,
   indicator: Indicator,
-  meta: { durationMs: number; upgradedFromVersion: number | null },
+  meta: { durationMs: number; upgradedFromVersion: number | null; inputWarnings?: string[] },
 ): RunResult {
   const plots = ctx.plots as Record<string, PineTsPlot>;
   const declaration = ctx.indicator as { title?: string; shorttitle?: string; overlay?: boolean };
@@ -132,7 +161,7 @@ export function serializeContext(
     lines: finalDrawings(plots[DRAWING_KEYS.lines]),
     boxes: finalDrawings(plots[DRAWING_KEYS.boxes]),
     tables: finalDrawings(plots[DRAWING_KEYS.tables]),
-    warnings: ctx.warnings.map((warning) => warning.message),
+    warnings: [...(meta.inputWarnings ?? []), ...ctx.warnings.map((warning) => warning.message)],
     upgradedFromVersion: meta.upgradedFromVersion,
     durationMs: meta.durationMs,
   };

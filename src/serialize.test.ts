@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Indicator, PineTS } from "pinets";
-import { serializeContext, toPineTsCandles, toRunError } from "./serialize";
+import { applyInputs, serializeContext, toPineTsCandles, toRunError } from "./serialize";
 import { syntheticCandles as candles } from "./testing";
 
 async function runScript(source: string, count = 80) {
@@ -36,7 +36,14 @@ bgcolor(r > 70 ? color.new(color.red, 85) : na)
     expect(result.shortTitle).toBe("RT");
     expect(result.overlay).toBe(false);
     expect(result.inputs).toEqual([
-      expect.objectContaining({ varId: "len", title: "Length", type: "int", defval: 14, minval: 1 }),
+      expect.objectContaining({
+        varId: "len",
+        title: "Length",
+        type: "int",
+        defval: 14,
+        value: 14,
+        minval: 1,
+      }),
     ]);
     const byKey = Object.fromEntries(result.plots.map((plot) => [plot.key, plot]));
     expect(byKey.RSI?.style).toBe("line");
@@ -82,6 +89,45 @@ plot(ta.sma(close, 50), "SMA")
     const sma = result.plots.find((plot) => plot.key === "SMA");
     expect(sma?.points[0]?.value).toBeNull();
     expect(sma?.points.at(-1)?.value).toBeNumber();
+  });
+});
+
+describe("applyInputs", () => {
+  const source = `//@version=6
+indicator("inputs")
+len = input.int(14, "Length", minval=2, maxval=50)
+mode = input.string("EMA", "Mode", options=["EMA", "SMA"])
+src = input.source(close, "Source")
+plot(ta.sma(src, len) + input.int(5, "Inline"), "v")`;
+
+  test("applies valid overrides and reports the value each input used", async () => {
+    const indicator = new Indicator(source);
+    const skipped = applyInputs(indicator, { len: 7, mode: "SMA", src: "high", in_3: 9 });
+    const pine = new PineTS(toPineTsCandles(candles(40), "60"), "TEST", "60");
+    const result = serializeContext(await pine.run(indicator), indicator, {
+      durationMs: 1,
+      upgradedFromVersion: null,
+      inputWarnings: skipped,
+    });
+
+    expect(skipped).toEqual([]);
+    expect(result.inputs.map((input) => [input.varId || input.id, input.defval, input.value])).toEqual([
+      ["len", 14, 7],
+      ["mode", "EMA", "SMA"],
+      ["src", "close", "high"],
+      ["in_3", 5, 9],
+    ]);
+  });
+
+  test("skips stale keys and rejected values without failing the run", () => {
+    const indicator = new Indicator(source);
+    const skipped = applyInputs(indicator, { removed: 1, len: 999, mode: "XXX", src: "low" });
+
+    expect(skipped).toHaveLength(3);
+    expect(skipped[0]).toContain('input "removed" ignored');
+    expect(skipped[1]).toContain("above maxval 50");
+    expect(indicator.input.len).toBe(14);
+    expect(indicator.input.src).toBe("low");
   });
 });
 
