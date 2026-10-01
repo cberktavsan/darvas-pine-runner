@@ -15,10 +15,15 @@ License: AGPL-3.0-only (see `LICENSE`). PineTS is AGPL-3.0 as well.
 PineTS transpiles Pine to JavaScript and evaluates it with `new Function`. A script therefore runs
 with the full privileges of its JavaScript context. Running user scripts on a server would let a
 script read `process.env` or call `fetch`. The runner keeps scripts in the visitor's browser, inside
-a sandboxed iframe on the runner's own origin, with a Content-Security-Policy of
-`connect-src 'none'`. The embedding page's cookies and storage are on another origin, so a script
-can waste the visitor's own CPU and nothing else. The host page terminates the worker when a run
-exceeds its time budget.
+a sandboxed iframe on the runner's own origin. The embedding page's cookies and storage are on
+another origin, so a script cannot read them.
+
+The page's Content-Security-Policy is `connect-src 'none'`, and the worker that runs the script is
+started from a blob URL, so it inherits that policy: `fetch`, `XMLHttpRequest` and `WebSocket` fail
+inside a script. The policy has to allow `'unsafe-eval'` because PineTS needs it. A script can waste
+the visitor's own CPU and nothing else, and the host page terminates the worker when a run exceeds
+its time budget. `bun run dev` serves the worker as a normal module without this policy; test the
+network block against `bun run build` and `bun run preview`.
 
 Use `sandbox="allow-scripts allow-same-origin"`, not `allow-scripts` alone: an opaque origin makes
 the CSP `'self'` source match nothing, which blocks the runner's own scripts.
@@ -143,6 +148,6 @@ bun run preview    # serves dist/ on 5174
 
 ## Deployment
 
-`dist/` is static. Serve it from its own hostname and repeat the Content-Security-Policy from
-`index.html` as an HTTP header so it also covers the worker script. `deploy/nginx.conf` is a
-starting point.
+`dist/` is static and uses relative asset URLs, so it can live on any static host or path. Serve it
+from an origin other than the embedding application's. The policy lives in a meta tag in
+`index.html`; `deploy/nginx.conf` shows how to repeat it as a header on a host you control.

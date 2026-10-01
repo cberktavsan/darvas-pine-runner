@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Iframe entry: relays run requests from the embedding page to a Web Worker,
 // one at a time, and kills the worker when a script exceeds its budget.
+// Inlined so the worker starts from a blob URL: a blob worker inherits this page's
+// Content-Security-Policy, which is what keeps user scripts off the network on any static host.
+import RunnerWorker from "./worker?worker&inline";
 import {
   PROTOCOL_VERSION,
   isDataResponse,
@@ -36,7 +39,7 @@ function failure(id: string, message: string): RunReply {
 }
 
 function createWorker(): Worker {
-  const next = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+  const next = new RunnerWorker();
   next.onmessage = (event: MessageEvent<RunReply | DataRequest>) => {
     if (event.data.type === "pine-runner:data-request") forwardDataRequest(event.data);
     else finish(event.data);

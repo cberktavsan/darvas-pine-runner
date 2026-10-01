@@ -6,6 +6,8 @@ const pinets = JSON.parse(
 ) as { version: string };
 
 export default defineConfig({
+  // Relative asset URLs, so the build also works under a path such as GitHub Pages.
+  base: "./",
   define: {
     __PINETS_VERSION__: JSON.stringify(pinets.version),
   },
