@@ -1,34 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { Indicator, PineTS } from "pinets";
-import type { RunnerCandles } from "./protocol";
 import { serializeContext, toPineTsCandles, toRunError } from "./serialize";
-
-function candles(count: number): RunnerCandles {
-  const time: number[] = [];
-  const open: number[] = [];
-  const high: number[] = [];
-  const low: number[] = [];
-  const close: number[] = [];
-  const volume: number[] = [];
-  let price = 100;
-  for (let i = 0; i < count; i += 1) {
-    const next = price + Math.sin(i / 4);
-    time.push(1_704_067_200_000 + i * 3_600_000);
-    open.push(price);
-    high.push(Math.max(price, next) + 0.5);
-    low.push(Math.min(price, next) - 0.5);
-    close.push(next);
-    volume.push(1_000 + i);
-    price = next;
-  }
-  return { time, open, high, low, close, volume };
-}
+import { syntheticCandles as candles } from "./testing";
 
 async function runScript(source: string, count = 80) {
   const indicator = new Indicator(source);
   const pine = new PineTS(toPineTsCandles(candles(count), "60"), "TEST", "60");
   const ctx = await pine.run(indicator);
-  return serializeContext(ctx, indicator, 1);
+  return serializeContext(ctx, indicator, { durationMs: 1, upgradedFromVersion: null });
 }
 
 describe("toPineTsCandles", () => {
@@ -90,6 +69,7 @@ plot(close)
     expect(result.labels.map((label) => label.text)).toEqual(["kept"]);
     expect(result.lines).toHaveLength(1);
     expect(result.lines[0]).toMatchObject({ x1: 74, x2: 79, width: 2, xloc: "bi" });
+    expect(result.upgradedFromVersion).toBeNull();
     expect(result.boxes[0]).toMatchObject({ left: 76, right: 79, text: "b" });
   });
 
@@ -116,5 +96,9 @@ describe("toRunError", () => {
 
   test("passes other messages through", () => {
     expect(toRunError("boom")).toEqual({ message: "boom" });
+  });
+
+  test("subtracts lines the runner added above the source", () => {
+    expect(toRunError(new Error("Unterminated string at 4:2"), 1)).toMatchObject({ line: 3 });
   });
 });

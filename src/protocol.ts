@@ -2,7 +2,7 @@
 // Message contract between a host page and the runner iframe.
 // Every message carries a `type` prefixed with `pine-runner:`.
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 export type ScalarInput = string | number | boolean;
 
@@ -70,6 +70,8 @@ export interface RunResult {
   boxes: Record<string, unknown>[];
   tables: Record<string, unknown>[];
   warnings: string[];
+  /** Original `//@version` when the runner rewrote a v1-v4 script to v5 before running it. */
+  upgradedFromVersion: number | null;
   durationMs: number;
 }
 
@@ -93,8 +95,34 @@ export interface RunReply {
   error?: RunError;
 }
 
-export type HostToRunner = RunRequest;
-export type RunnerToHost = ReadyMessage | RunReply;
+/**
+ * Sent while a run is in progress when the script reads another symbol or timeframe
+ * (`request.security`). The embedder answers with a DataResponse carrying the same ids.
+ */
+export interface DataRequest {
+  type: "pine-runner:data-request";
+  runId: string;
+  requestId: string;
+  symbol: string;
+  /** TradingView timeframe string, as in RunRequest. */
+  timeframe: string;
+  /** Bar open time bounds in milliseconds, when the script's range is known. */
+  from?: number;
+  to?: number;
+  limit?: number;
+}
+
+export interface DataResponse {
+  type: "pine-runner:data-response";
+  runId: string;
+  requestId: string;
+  ok: boolean;
+  candles?: RunnerCandles;
+  error?: string;
+}
+
+export type HostToRunner = RunRequest | DataResponse;
+export type RunnerToHost = ReadyMessage | RunReply | DataRequest;
 
 export function isRunRequest(value: unknown): value is RunRequest {
   if (!value || typeof value !== "object") return false;
@@ -108,7 +136,19 @@ export function isRunRequest(value: unknown): value is RunRequest {
   );
 }
 
-function isCandles(value: unknown): value is RunnerCandles {
+export function isDataResponse(value: unknown): value is DataResponse {
+  if (!value || typeof value !== "object") return false;
+  const m = value as Record<string, unknown>;
+  return (
+    m.type === "pine-runner:data-response" &&
+    typeof m.runId === "string" &&
+    typeof m.requestId === "string" &&
+    typeof m.ok === "boolean" &&
+    (m.ok ? isCandles(m.candles) : true)
+  );
+}
+
+export function isCandles(value: unknown): value is RunnerCandles {
   if (!value || typeof value !== "object") return false;
   const c = value as Record<string, unknown>;
   const columns = ["time", "open", "high", "low", "close", "volume"] as const;

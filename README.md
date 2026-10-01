@@ -58,14 +58,14 @@ Types live in `src/protocol.ts`.
 
 ### `pine-runner:ready` (runner to host)
 
-Sent once after the page loads. Carries `protocol` (currently `1`) and the `pinets` version.
+Sent once after the page loads. Carries `protocol` (currently `2`) and the `pinets` version.
 
 ### `pine-runner:run` (host to runner)
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | string | Echoed in the reply. |
-| `source` | string | Native Pine Script v5 or v6, or PineTS JavaScript syntax. |
+| `source` | string | Pine Script v1 to v6, or PineTS JavaScript syntax. Scripts older than v5 are rewritten to v5 first (see below). |
 | `candles` | columnar OHLCV | `time` is the bar open time in milliseconds since epoch. All columns share one length. |
 | `timeframe` | string | TradingView format: `1`, `5`, `15`, `60`, `240`, `D`, `W`, `M`. |
 | `symbol` | string, optional | Exposed to the script as `syminfo.ticker`. |
@@ -92,7 +92,43 @@ Runs execute one at a time in arrival order.
 - `labels`, `lines`, `boxes`, `tables`: the final state of drawing objects, as PineTS stores them.
   `x` coordinates are bar indexes unless the object's `xloc` is `bt` (bar time).
 - `warnings`: runtime warnings PineTS collected.
+- `upgradedFromVersion`: the script's original `//@version` when the runner rewrote it, else `null`.
 - `durationMs`: wall-clock time of the run.
+
+### `pine-runner:data-request` (runner to host) and `pine-runner:data-response` (host to runner)
+
+The runner has no network access. When a script reads another symbol or timeframe with
+`request.security()`, the runner asks the embedding page for those candles:
+
+```json
+{ "type": "pine-runner:data-request", "runId": "run-1", "requestId": "data-1",
+  "symbol": "BTCUSDT", "timeframe": "D", "from": 1701475200000, "to": 1704067199999 }
+```
+
+`from`, `to` and `limit` are present when the script's range is known. The embedder answers with
+the same ids:
+
+```json
+{ "type": "pine-runner:data-response", "runId": "run-1", "requestId": "data-1",
+  "ok": true, "candles": { "time": [], "open": [], "high": [], "low": [], "close": [], "volume": [] } }
+```
+
+or `{ ..., "ok": false, "error": "no data" }`, which fails the run with that message. The embedder
+has 15 seconds per request; the wait does not count against the script's time budget. A run may
+make at most 12 data requests. The chart's own symbol and timeframe are served from the run
+request and never asked for.
+
+The embedder decides what it serves. Treat the request as untrusted input: it comes from a user
+script, so validate the symbol and timeframe and serve only data the user may read.
+
+## Legacy scripts
+
+PineTS accepts v5 and v6 only. `src/legacy.ts` rewrites v1 to v4 source into v5 before it runs:
+`study()` to `indicator()`, the `ta.`, `math.`, `str.` and `request.` namespaces, typed `input()`
+calls, the removed `transp` argument, `iff()`, and the bare colour and style names of v3. Names the
+script declares itself are left alone. The rewrite keeps line numbers, so error locations match the
+original source. It is a syntactic translation: results can differ from TradingView where v4 and v5
+semantics differ, and `upgradedFromVersion` lets the embedder say so.
 
 ## Development
 

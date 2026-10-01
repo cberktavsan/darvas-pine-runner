@@ -116,7 +116,7 @@ export function serializeInputs(indicator: Indicator): InputMeta[] {
 export function serializeContext(
   ctx: Context,
   indicator: Indicator,
-  durationMs: number,
+  meta: { durationMs: number; upgradedFromVersion: number | null },
 ): RunResult {
   const plots = ctx.plots as Record<string, PineTsPlot>;
   const declaration = ctx.indicator as { title?: string; shorttitle?: string; overlay?: boolean };
@@ -133,15 +133,24 @@ export function serializeContext(
     boxes: finalDrawings(plots[DRAWING_KEYS.boxes]),
     tables: finalDrawings(plots[DRAWING_KEYS.tables]),
     warnings: ctx.warnings.map((warning) => warning.message),
-    durationMs,
+    upgradedFromVersion: meta.upgradedFromVersion,
+    durationMs: meta.durationMs,
   };
 }
 
 const LOCATION_PATTERN = /\bat (\d+):(\d+)\b/u;
 
-export function toRunError(error: unknown): { message: string; line?: number; column?: number } {
+/** `lineOffset` is the number of lines the runner added above the user's source. */
+export function toRunError(
+  error: unknown,
+  lineOffset = 0,
+): { message: string; line?: number; column?: number } {
   const message = error instanceof Error ? error.message : String(error);
   const location = LOCATION_PATTERN.exec(message);
   if (!location) return { message };
-  return { message, line: Number(location[1]), column: Number(location[2]) };
+  return {
+    message,
+    line: Math.max(1, Number(location[1]) - lineOffset),
+    column: Number(location[2]),
+  };
 }
