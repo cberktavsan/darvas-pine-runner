@@ -10,12 +10,15 @@ knows nothing about the application that embeds it. Any page can use it through 
 
 License: AGPL-3.0-only (see `LICENSE`). PineTS is AGPL-3.0 as well.
 
+The same runner also works as an HTTP server that runs each script in a Deno process with no
+permissions. See [Server mode](#server-mode).
+
 ## Why an iframe
 
 PineTS transpiles Pine to JavaScript and evaluates it with `new Function`. A script therefore runs
-with the full privileges of its JavaScript context. Running user scripts on a server would let a
-script read `process.env` or call `fetch`. The runner keeps scripts in the visitor's browser, inside
-a sandboxed iframe on the runner's own origin. The embedding page's cookies and storage are on
+with the full privileges of its JavaScript context. Running user scripts in an ordinary server
+process would let a script read `process.env` or call `fetch`. In browser mode the runner keeps
+scripts in the visitor's browser, inside a sandboxed iframe on the runner's own origin. The embedding page's cookies and storage are on
 another origin, so a script cannot read them.
 
 The page's Content-Security-Policy is `connect-src 'none'`, and the worker that runs the script is
@@ -153,3 +156,35 @@ bun run preview    # serves dist/ on 5174
 `dist/` is static and uses relative asset URLs, so it can live on any static host or path. Serve it
 from an origin other than the embedding application's. The policy lives in a meta tag in
 `index.html`; `deploy/nginx.conf` shows how to repeat it as a header on a host you control.
+
+## Server mode
+
+`bun run build:server` writes two bundles to `dist-server/`:
+
+- `main.js`, an HTTP server for [Deno](https://deno.com). `scripts/serve.sh` starts it with only
+  the permissions it needs: listening on its address, reading its `PINE_RUNNER_*` settings and
+  starting Deno again.
+- `child.js`, which runs one script. The server starts it for every request with an empty
+  environment and no permission except reading one PineTS switch by name. It has no network, no
+  file system and no subprocesses, reads the request from stdin and writes the answer to stdout.
+  The server kills it after 10 seconds.
+
+Settings: `PINE_RUNNER_TOKEN` (required, 32 characters or more), `PINE_RUNNER_HOST` (default
+`127.0.0.1`), `PINE_RUNNER_PORT` (default `8787`), `PINE_RUNNER_CONCURRENCY` (default `2`).
+
+```
+POST /run            Authorization: Bearer <token>
+{ "source": "...", "candles": { "time": [...], ... }, "timeframe": "60", "symbol": "BTCUSDT",
+  "inputs": { "len": 21 }, "series": [] }
+```
+
+The answer is `{ "ok": true, "result": RunResult }`, `{ "ok": false, "error": RunError }`, or
+`{ "ok": false, "needs": [{ "symbol", "timeframe", "limit"?, "from"?, "to"? }] }`. `needs` lists
+the series a script read with `request.security` that the request did not carry. The runner has no
+network, so the caller fetches those candles and posts the run again with them in `series`.
+`GET /health` needs no token.
+
+Deno's permissions are the first wall, not the only one. Run the server on a host that holds no
+secrets, as an unprivileged user, with the listener on loopback, outbound traffic blocked and
+memory and CPU capped for the whole service. `deploy/pine-runner.service` is a systemd unit that
+does this.

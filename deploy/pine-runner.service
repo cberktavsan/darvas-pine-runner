@@ -1,0 +1,54 @@
+# Example systemd unit for the server runner. Adjust paths, user and port to your host.
+# The host should hold nothing worth stealing: no application secrets, no database access.
+# Keep the listener on loopback and reach it through a tunnel or a private network.
+[Unit]
+Description=Pine runner (scripts run in permissionless child processes)
+After=network.target
+
+[Service]
+User=pinerunner
+Group=pinerunner
+# PINE_RUNNER_TOKEN (32+ characters), PINE_RUNNER_HOST, PINE_RUNNER_PORT, PINE_RUNNER_CHILD
+EnvironmentFile=/etc/pine-runner/env
+ExecStart=/usr/local/bin/deno run --no-prompt --no-config --no-remote --no-npm --allow-net=127.0.0.1:8787 --allow-env=PINE_RUNNER_PORT,PINE_RUNNER_HOST,PINE_RUNNER_TOKEN,PINE_RUNNER_CHILD,PINE_RUNNER_CONCURRENCY --allow-run=/usr/local/bin/deno /opt/pine-runner/main.js
+Restart=always
+RestartSec=2
+
+# The service and every child it starts may talk to loopback only.
+IPAddressDeny=any
+IPAddressAllow=localhost
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Limits for the whole service, children included.
+MemoryMax=2500M
+MemorySwapMax=0
+TasksMax=256
+CPUQuota=180%
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+# V8 guards its code pages with memory protection keys.
+SystemCallFilter=pkey_alloc pkey_mprotect pkey_free
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

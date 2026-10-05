@@ -1,7 +1,7 @@
 {
   "name": "darvas-pine-runner",
   "version": "0.1.0",
-  "description": "Standalone Pine Script runner: PineTS inside a sandboxed iframe and Web Worker, driven over postMessage.",
+  "description": "Standalone Pine Script runner: PineTS in a sandboxed iframe for browsers, or in permissionless Deno processes behind an HTTP server.",
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
@@ -10,7 +10,8 @@
     "build": "vite build",
     "preview": "vite preview --port 5174 --strictPort",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "build:server": "bun build src/server/child.ts src/server/main.ts --outdir dist-server --target browser --format esm"
   },
   "dependencies": {
     "pinets": "0.10.0"
