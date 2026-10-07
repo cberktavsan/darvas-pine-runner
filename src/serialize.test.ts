@@ -19,6 +19,17 @@ describe("toPineTsCandles", () => {
 });
 
 describe("serializeContext", () => {
+  test("names the missing declaration when a script never calls indicator()", async () => {
+    // TradingView's built-in ribbon pasted with its indicator() line commented out.
+    await expect(
+      runScript(`
+//@version=6
+//indicator("Moving Average Ribbon", overlay = true)
+plot(ta.sma(close, 20), "MA")
+`),
+    ).rejects.toThrow("The script has no indicator() declaration");
+  });
+
   test("keeps plots, hlines, fills and shapes with their styles", async () => {
     const result = await runScript(`
 //@version=6

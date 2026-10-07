@@ -148,7 +148,13 @@ export function serializeContext(
   meta: { durationMs: number; upgradedFromVersion: number | null; inputWarnings?: string[] },
 ): RunResult {
   const plots = ctx.plots as Record<string, PineTsPlot>;
-  const declaration = ctx.indicator as { title?: string; shorttitle?: string; overlay?: boolean };
+  const declaration = ctx.indicator as
+    | { title?: string; shorttitle?: string; overlay?: boolean }
+    | undefined;
+  // A script that never called indicator() has no declaration; Pine itself refuses such a script.
+  if (!declaration) {
+    throw new Error("The script has no indicator() declaration. Add one before the first plot.");
+  }
   return {
     title: declaration.title ?? "",
     shortTitle: declaration.shorttitle ?? "",
